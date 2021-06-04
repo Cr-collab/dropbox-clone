@@ -1,5 +1,9 @@
+
+
 class DropBoxController {
+
     constructor(btnSendfile) {
+
         this.btnSendfileEl = document.querySelector(btnSendfile);
         // Botão de enviar arquivos
         this.inputFileEL = document.querySelector("#files");
@@ -15,6 +19,20 @@ class DropBoxController {
 
         this.listFileEl = document.querySelector("#list-of-files-and-directories");
         //Selecionadno elementos ul que carrega os diretorios com base no seu tipo;
+
+        this.onselectionchange = new Event('selectionchange')
+        //estamos criando um evento personalizado defirente do click que é nativo do javascript
+
+        this.btnNewFolder = document.querySelector('#btn-new-folder');
+        // botão de cria pasta 
+
+        this.btnRename = document.querySelector('#btn-rename');
+        this.btnRename.style.display = 'none'
+        //botão renomerar arquivo
+
+        this.btnDelete = document.querySelector('#btn-delete');
+        this.btnDelete.style.display = 'none'
+        //botão de deletar arquivos e files
         
 
         this.connectFirebase();
@@ -46,7 +64,168 @@ class DropBoxController {
         firebase.analytics();
     }
 
+    getSelection()
+    {
+        return this.listFileEl.querySelectorAll(".selected");
+        /** retornara  quantos elementos estao com  classe selected */
+    }
+
+    removeTask()
+    {
+          let promises = [];
+
+          this.getSelection().forEach(li =>
+            {
+                  let file = JSON.parse(li.dataset.file);
+                  let key = li.dataset.key;
+
+                  promises.push(new Promise((resolve,reject)=>
+                  {
+
+                              
+                    let ajax = new XMLHttpRequest();
+
+                    ajax.open('DELETE', '/file');
+                    /* aqui vamos abri nossa 
+                       conexxão via post vamos 
+                       mandar para pasta upload; 
+                    **/
+    
+    
+                    ajax.onload/** assim descrobiremos
+                     se deu errado; */ = event => {
+                            
+    
+                            try {
+                                resolve(JSON.parse(ajax.responseText));
+    
+                            } catch (e) {
+                                reject(e);
+                                /**se o json vier invalido da um erro */
+                            }
+    
+                        };
+    
+                    ajax.onerror = e => {
+                       
+                        reject(e);
+                        /** se der algum problema */
+                    };
+    
+                    ajax.upload.onprogress = event => {
+                        /**a gente quer saber.Já consegui 
+                         * enviar alguns bytes para o 
+                         * servidor avisar a gente enviou
+                         *  mais avisa a gente.Aí a gente 
+                         * consegue fazer a barrinha 
+                         * acontecendo em tempo real.
+                         * Eu não quero um progresso 
+                         * no Ajax como um todo eu quero
+                         *  no upload e ele tem essa
+                         *  inteligência pra isso você
+                         *  coloca  ajax.upload.onprogress
+                         * */
+                        this.uploadProgress(event, file);
+                    };
+    
+    
+    
+                    let formData = new FormData();
+                    /** para ler o arquivo   */
+    
+                    formData.append('path', file.path)
+                    /** esse metodo vai juntar , recebe 
+                     * dois parametros : o nome do campo 
+                     * que o post lá no servidor recebe ,
+                     * e o segundo parametro que vai receber 
+                     * o arquivo que você vai enviar*/
+                     formData.append('key', key)
+    
+                    this.startUploadTime = Date.now();
+                    // Captura o inicio do upload 
+    
+                    ajax.send(formData);
+                    /** aqui envia o arquivo */
+    
+
+                  }));
+            });
+            return Promise.all(promises);
+    }
+
     initEvents() {
+
+
+        this.btnDelete.addEventListener('click', e =>
+        {
+
+         this.removeTask().then(responses =>
+            {
+                 responses.forEach(response=>
+                    {
+                        if(response.fields.key)
+                        {
+                            this.getFirebaseRef().child(response.fields.key).remove();
+                        }
+                    })
+                  console.log('responses');
+
+            }).catch(e=>{
+                reject(err);
+                console.log(err);
+            });
+
+        });
+
+        this.btnRename/** botão de editar */.addEventListener/*Escuta quando houver o click*/('click', e =>
+        {
+            let li = this.getSelection()[0];
+            /** pegando a li  selecionada */
+
+     
+
+            let file = JSON.parse(li.dataset.file);
+            /** aqui to pegando os dados dentro da li   e convertendo para objeto*/
+
+            let rename = prompt('Digite o nome que você deseja para seu arquivo ?', file.name);
+            /** aqui to criando o prompt para usaurio interagir  e o resulta vai ficar na variavel rename*/
+
+            if (rename) 
+            {
+                file.name = rename;
+                /** file na posição name recebe o rename   */
+
+                this.getFirebaseRef().child(li.dataset.key).set(file);
+                /** setando o novo valor do arquivo */
+            }
+        })
+
+        this.listFileEl.addEventListener('selectionchange', e =>{
+
+                 
+                    
+                    
+                     switch (this.getSelection().length/**quanto  quantos elementos estao com  classe selected */)
+                     
+                     {
+                            case 0 :
+
+                                this.btnRename.style.display = 'none';
+                                this.btnDelete.style.display = 'none';
+                                  
+                            break;
+
+                            case 1 :
+                                this.btnRename.style.display = 'block';
+                                this.btnDelete.style.display = 'block';
+                            break;
+
+                            default:
+                                this.btnRename.style.display = 'none';
+                                this.btnDelete.style.display = 'block';
+                     }
+
+        });
 
         this.btnSendfileEl.addEventListener('click', event => {
             this.inputFileEL.click();
@@ -434,6 +613,7 @@ class DropBoxController {
         let li = document.createElement('li');
 
         li.dataset.key = key;
+        li.dataset.file = JSON.stringify(file);
 
         li.innerHTML = ` 
               ${this.getFileIconView(file)}
@@ -482,10 +662,12 @@ class DropBoxController {
    {
     linha/** a linha  */.addEventListener/*Escutando*/('click' /** o evento click */, e =>
        {
+        
 
         if(e.shiftKey/** tem ai evento junto com tecla shift */)
         {
-                    let firstLi/**primero click sobre a li */ = this.listFileEl/** ul onde esta a li */.querySelector('li.selected');
+              
+                 let firstLi/**primero click sobre a li */ = this.listFileEl/** ul onde esta a li */.querySelector('li.selected');
 
                     if(firstLi/** tem o primeiro ai */)
                     {
@@ -512,7 +694,11 @@ class DropBoxController {
                                }
                           });
 
+                          this.listFileEl.dispatchEvent(this.onselectionchange)
+                         // qual evento eu quero emitir ou qual quero avisar 
+
                           return true;
+                          
                     }
         }
 
@@ -528,6 +714,9 @@ class DropBoxController {
          }
 
         linha/**peguei a linha */.classList/**acessei a propriedade  */.toggle/* e adicinei essa classe*/('selected');
+
+        this.listFileEl.dispatchEvent(this.onselectionchange)
+        // qual evento eu quero emitir ou qual quero avisar 
         
        })
    }

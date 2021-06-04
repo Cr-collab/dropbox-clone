@@ -4,6 +4,11 @@ class DropBoxController {
 
     constructor(btnSendfile) {
 
+        this.currentFolder = ['hcode'];
+        //onde ficara salvo o caminho do usuario
+
+        this.navEl = document.querySelector('#browse-location')
+
         this.btnSendfileEl = document.querySelector(btnSendfile);
         // Botão de enviar arquivos
         this.inputFileEL = document.querySelector("#files");
@@ -41,8 +46,10 @@ class DropBoxController {
         this.initEvents();
         //inicia o evento de upload
 
-        this.readFiles();
-        /** percorre os dados do firebase e  joga na tela */
+        this.openFolder();
+        /** abre as pastas */
+
+       
     }
 
     connectFirebase()
@@ -153,8 +160,23 @@ class DropBoxController {
             return Promise.all(promises);
     }
 
-    initEvents() {
+    initEvents(){
 
+        this.btnNewFolder.addEventListener('click', event =>
+        {
+               
+            let name = prompt("Nome da nova Pasta ?");
+
+            if(name)
+            {
+                this.getFirebaseRef().push().set({
+                    name,
+                    type: 'folder',
+                    path:this.currentFolder.join('/')
+                })
+            }
+
+        });      
 
         this.btnDelete.addEventListener('click', e =>
         {
@@ -278,9 +300,11 @@ class DropBoxController {
 
     }
 
-    getFirebaseRef()
+    getFirebaseRef(path)
     {
-        return firebase.database().ref('files');
+        if(!path) path = this.currentFolder.join('/');
+
+        return firebase.database().ref(path);
         // chamndo o firebase e criando um nó files 
     }
 
@@ -633,6 +657,9 @@ class DropBoxController {
 
    readFiles()
    {
+              
+       this.lastFolder = this.currentFolder.join('/');
+             
        this.getFirebaseRef()/**referencia do firebase */.on/*esta ouvindo*/('value'/**nome desse evento */, snapshot/** uma fotografia desse evento */ =>
        {
             this.listFileEl.innerHTML = ''
@@ -646,11 +673,14 @@ class DropBoxController {
                         let data = snapshotItem.exportVal();
                         /** valores da coleção */
 
-                        console.log(key , data);
+                      
 
-                        this.listFileEl/** ul do html */.appendChild /*filho dela */(this.getFileView(data,key)/** aqui esta retornado a li */);
+                        if(data.type)
+                        {
+
+                          this.listFileEl/** ul do html */.appendChild /*filho dela */(this.getFileView(data,key)/** aqui esta retornado a li */);
                         
-
+                         } 
 
                 });
 
@@ -658,8 +688,112 @@ class DropBoxController {
    }
 
 
+   openFolder()
+   {
+
+    if(this.lastFolder) this.getFirebaseRef(this.lastFolder).off('value');
+
+    this.readFiles();
+    /** percorre os dados do firebase e  joga na tela */   
+    
+    this.renderNav();
+    this.renderFiles();
+
+
+   }
+    
+   renderNav()
+   {
+       let nav = document.createElement('nav');
+       let path = [];
+
+       for(let i = 0; i < this.currentFolder.length; i++ )
+       {
+                let folderName = this.currentFolder[i];
+                let span = document.createElement('span');
+
+                path.push(folderName )
+
+                if(i + 1 === this.currentFolder.length)
+                {
+                        span.innerHTML = folderName;
+                } else
+                {
+                     span.className = 'breadcrumb-segment__wrapper' 
+                    span.innerHTML = `
+                    
+                    <span class="ue-effect-container uee-BreadCrumbSegment-link-0">
+                        <a href="#" data-path='${path.join('/')}' class="breadcrumb-segment">${folderName}</a>
+                    </span> 
+                    <svg width="24" height="24" viewBox="0 0 24 24" class="mc-icon-template-stateless" style="top: 4px; position: relative;">
+                        <title>arrow-right</title>
+                        <path d="M10.414 7.05l4.95 4.95-4.95 4.95L9 15.534 12.536 12 9 8.464z" fill="#637282" fill-rule="evenodd"></path>
+                    </svg>
+                   
+                    `
+
+                 
+                }
+                nav.appendChild(span)
+       }
+       
+       this.navEl.innerHTML = nav.innerHTML;
+
+       this.navEl.querySelectorAll('a').forEach(a=>
+        {
+            a.addEventListener('click', e =>
+            {
+                 e.preventDefault();
+
+                 this.currentFolder = a.dataset.path.split('/');
+                 this.openFolder();
+
+                   
+            });
+        });
+
+        /**
+         * <span class="breadcrumb-segment__wrapper">
+                                            <span class="ue-effect-container uee-BreadCrumbSegment-link-0">
+                                                <a href="https://www.dropbox.com/work" class="breadcrumb-segment">HCODE</a>
+                                            </span>
+                                            <svg width="24" height="24" viewBox="0 0 24 24" class="mc-icon-template-stateless" style="top: 4px; position: relative;">
+                                                <title>arrow-right</title>
+                                                <path d="M10.414 7.05l4.95 4.95-4.95 4.95L9 15.534 12.536 12 9 8.464z" fill="#637282" fill-rule="evenodd"></path>
+                                            </svg>
+                                        </span>
+                                        
+                */ 
+     
+   }
+
    initEventsLi(linha/** li passada pelo get file view */)
    {
+                 
+           linha.addEventListener('dblclick', e=>
+           {
+
+              let file = JSON.parse(linha.dataset.file);
+
+                 switch(file.type)
+              {
+                  case 'folder':
+                            
+                     this.currentFolder.push(file.name);
+                     this.openFolder();
+                  
+                  break
+
+                  default:
+                    window.open('/file?path=' + file.path);
+              }
+
+           });
+
+
+
+
+
     linha/** a linha  */.addEventListener/*Escutando*/('click' /** o evento click */, e =>
        {
         
